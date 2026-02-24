@@ -7,6 +7,7 @@ import {
   Pressable,
   Animated,
 } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import * as Haptics from "expo-haptics";
 import { Reminder } from "../types/reminder";
 import { ThemeColors, Spacing, BorderRadius, FontSize } from "../constants/theme";
@@ -19,25 +20,6 @@ function formatTime(hour: number, minute: number): string {
   const h = hour % 12 || 12;
   const m = minute.toString().padStart(2, "0");
   return `${h}:${m} ${period}`;
-}
-
-function getDayLabel(days: number[]): string {
-  if (days.length === 7) return "Every day";
-  if (
-    days.length === 5 &&
-    [2, 3, 4, 5, 6].every((d) => days.includes(d))
-  )
-    return "Weekdays";
-  if (
-    days.length === 2 &&
-    days.includes(1) &&
-    days.includes(7)
-  )
-    return "Weekends";
-  return days
-    .sort((a, b) => a - b)
-    .map((d) => DAY_LABELS[d - 1])
-    .join(", ");
 }
 
 interface Props {
@@ -60,6 +42,7 @@ export default function ReminderCard({
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
+  const swipeableRef = useRef<Swipeable>(null);
 
   React.useEffect(() => {
     Animated.parallel([
@@ -102,8 +85,77 @@ export default function ReminderCard({
     onToggle(reminder.id, value);
   };
 
-  const handleLongPress = () => {
+  const renderRightActions = (
+    progress: Animated.AnimatedInterpolation<number>,
+    dragX: Animated.AnimatedInterpolation<number>
+  ) => {
+    const scale = dragX.interpolate({
+      inputRange: [-100, -50, 0],
+      outputRange: [1, 0.8, 0],
+      extrapolate: "clamp",
+    });
+
+    const opacity = dragX.interpolate({
+      inputRange: [-100, -50, 0],
+      outputRange: [1, 0.8, 0],
+      extrapolate: "clamp",
+    });
+
+    return (
+      <Animated.View
+        style={[
+          styles.deleteAction,
+          {
+            backgroundColor: colors.danger,
+            opacity,
+          },
+        ]}
+      >
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Text style={styles.deleteIcon}>🗑️</Text>
+          <Text style={styles.deleteText}>Delete</Text>
+        </Animated.View>
+      </Animated.View>
+    );
+  };
+
+  const renderLeftActions = (
+    progress: Animated.AnimatedInterpolation<number>,
+    dragX: Animated.AnimatedInterpolation<number>
+  ) => {
+    const scale = dragX.interpolate({
+      inputRange: [0, 50, 100],
+      outputRange: [0, 0.8, 1],
+      extrapolate: "clamp",
+    });
+
+    const opacity = dragX.interpolate({
+      inputRange: [0, 50, 100],
+      outputRange: [0, 0.8, 1],
+      extrapolate: "clamp",
+    });
+
+    return (
+      <Animated.View
+        style={[
+          styles.deleteActionLeft,
+          {
+            backgroundColor: colors.danger,
+            opacity,
+          },
+        ]}
+      >
+        <Animated.View style={{ transform: [{ scale }] }}>
+          <Text style={styles.deleteIcon}>🗑️</Text>
+          <Text style={styles.deleteText}>Delete</Text>
+        </Animated.View>
+      </Animated.View>
+    );
+  };
+
+  const handleSwipeOpen = (direction: "left" | "right") => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    swipeableRef.current?.close();
     onDelete(reminder.id);
   };
 
@@ -116,108 +168,124 @@ export default function ReminderCard({
         },
       ]}
     >
-      <Pressable
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={() => onPress(reminder)}
-        onLongPress={handleLongPress}
-        style={[
-          styles.card,
-          {
-            backgroundColor: colors.surface,
-            borderColor: reminder.enabled ? colors.primary + "30" : colors.border,
-            shadowColor: colors.shadow,
-          },
-        ]}
+      <Swipeable
+        ref={swipeableRef}
+        renderRightActions={renderRightActions}
+        renderLeftActions={renderLeftActions}
+        onSwipeableOpen={handleSwipeOpen}
+        overshootRight={false}
+        overshootLeft={false}
+        friction={2}
+        rightThreshold={80}
+        leftThreshold={80}
+        containerStyle={styles.swipeContainer}
       >
-        <View style={styles.cardContent}>
-          <View style={styles.leftSection}>
-            <Text
-              style={[
-                styles.time,
-                {
-                  color: reminder.enabled ? colors.text : colors.textMuted,
-                },
-              ]}
-            >
-              {formatTime(reminder.hour, reminder.minute)}
-            </Text>
-            <Text
-              style={[
-                styles.message,
-                {
-                  color: reminder.enabled
-                    ? colors.textSecondary
-                    : colors.textMuted,
-                },
-              ]}
-              numberOfLines={2}
-            >
-              {reminder.message}
-            </Text>
-            <View style={styles.daysRow}>
-              {DAY_VALUES.map((day, i) => {
-                const isActive = reminder.days.includes(day);
-                return (
-                  <View
-                    key={day}
-                    style={[
-                      styles.dayDot,
-                      {
-                        backgroundColor: isActive
-                          ? reminder.enabled
-                            ? colors.primary
-                            : colors.textMuted
-                          : "transparent",
-                        borderColor: isActive
-                          ? "transparent"
-                          : reminder.enabled
-                          ? colors.border
-                          : colors.borderLight,
-                      },
-                    ]}
-                  >
-                    <Text
+        <Pressable
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => onPress(reminder)}
+          style={[
+            styles.card,
+            {
+              backgroundColor: colors.surface,
+              borderColor: reminder.enabled ? colors.primary + "30" : colors.border,
+              shadowColor: colors.shadow,
+            },
+          ]}
+        >
+          <View style={styles.cardContent}>
+            <View style={styles.leftSection}>
+              <Text
+                style={[
+                  styles.time,
+                  {
+                    color: reminder.enabled ? colors.text : colors.textMuted,
+                  },
+                ]}
+              >
+                {formatTime(reminder.hour, reminder.minute)}
+              </Text>
+              <Text
+                style={[
+                  styles.message,
+                  {
+                    color: reminder.enabled
+                      ? colors.textSecondary
+                      : colors.textMuted,
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {reminder.message}
+              </Text>
+              <View style={styles.daysRow}>
+                {DAY_VALUES.map((day, i) => {
+                  const isActive = reminder.days.includes(day);
+                  return (
+                    <View
+                      key={day}
                       style={[
-                        styles.dayDotText,
+                        styles.dayDot,
                         {
-                          color: isActive
-                            ? "#fff"
+                          backgroundColor: isActive
+                            ? reminder.enabled
+                              ? colors.primary
+                              : colors.textMuted
+                            : "transparent",
+                          borderColor: isActive
+                            ? "transparent"
                             : reminder.enabled
-                            ? colors.textMuted
+                            ? colors.border
                             : colors.borderLight,
                         },
                       ]}
                     >
-                      {DAY_LABELS[i][0]}
-                    </Text>
-                  </View>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.dayDotText,
+                          {
+                            color: isActive
+                              ? "#fff"
+                              : reminder.enabled
+                              ? colors.textMuted
+                              : colors.borderLight,
+                          },
+                        ]}
+                      >
+                        {DAY_LABELS[i][0]}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.rightSection}>
+              <Switch
+                value={reminder.enabled}
+                onValueChange={handleToggle}
+                trackColor={{
+                  false: colors.toggleTrackOff,
+                  true: colors.toggleTrackOn,
+                }}
+                thumbColor="#ffffff"
+                ios_backgroundColor={colors.toggleTrackOff}
+              />
             </View>
           </View>
-          <View style={styles.rightSection}>
-            <Switch
-              value={reminder.enabled}
-              onValueChange={handleToggle}
-              trackColor={{
-                false: colors.toggleTrackOff,
-                true: colors.toggleTrackOn,
-              }}
-              thumbColor="#ffffff"
-              ios_backgroundColor={colors.toggleTrackOff}
-            />
-          </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </Swipeable>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
+  swipeContainer: {
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+  },
+  card: {
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     shadowOffset: { width: 0, height: 2 },
@@ -264,5 +332,30 @@ const styles = StyleSheet.create({
   dayDotText: {
     fontSize: 10,
     fontWeight: "600",
+  },
+  deleteAction: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 90,
+    borderTopRightRadius: BorderRadius.lg,
+    borderBottomRightRadius: BorderRadius.lg,
+  },
+  deleteActionLeft: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 90,
+    borderTopLeftRadius: BorderRadius.lg,
+    borderBottomLeftRadius: BorderRadius.lg,
+  },
+  deleteIcon: {
+    fontSize: 22,
+    textAlign: "center",
+  },
+  deleteText: {
+    color: "#fff",
+    fontSize: FontSize.xs,
+    fontWeight: "700",
+    marginTop: 2,
+    textAlign: "center",
   },
 });

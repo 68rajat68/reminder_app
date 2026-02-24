@@ -6,10 +6,10 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  Alert,
   RefreshControl,
   useColorScheme,
 } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,6 +19,7 @@ import { scheduleReminder, cancelReminder } from "../services/notifications";
 import { useThemeColors, Spacing, BorderRadius, FontSize } from "../constants/theme";
 import ReminderCard from "../components/ReminderCard";
 import EmptyState from "../components/EmptyState";
+import Toast from "../components/Toast";
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -27,13 +28,37 @@ function getGreeting(): string {
   return "Good evening";
 }
 
+function getTimeUntilText(hour: number, minute: number): string {
+  const now = new Date();
+  const target = new Date();
+  target.setHours(hour, minute, 0, 0);
+
+  if (target <= now) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  const diffMs = target.getTime() - now.getTime();
+  const diffMins = Math.round(diffMs / 60000);
+
+  if (diffMins < 1) return "less than a minute";
+  if (diffMins < 60) return `${diffMins} min`;
+
+  const hours = Math.floor(diffMins / 60);
+  const mins = diffMins % 60;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
   const colors = useThemeColors(colorScheme);
   const router = useRouter();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
   const fabScale = useRef(new Animated.Value(1)).current;
+  const prevCountRef = useRef(0);
 
   const loadData = useCallback(async () => {
     const data = await loadReminders();
@@ -42,18 +67,34 @@ export default function HomeScreen() {
       const bMin = b.hour * 60 + b.minute;
       return aMin - bMin;
     });
-    setReminders(data);
+    return data;
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadData();
+      loadData().then((data) => {
+        // Detect if a new reminder was added
+        if (prevCountRef.current > 0 && data.length > prevCountRef.current) {
+          const newest = data.reduce((a, b) =>
+            a.createdAt > b.createdAt ? a : b
+          );
+          if (newest.enabled) {
+            const timeUntil = getTimeUntilText(newest.hour, newest.minute);
+            setToastMessage(`Next notification in ${timeUntil}`);
+            setToastVisible(true);
+          }
+        }
+        prevCountRef.current = data.length;
+        setReminders(data);
+      });
     }, [loadData])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    const data = await loadData();
+    prevCountRef.current = data.length;
+    setReminders(data);
     setRefreshing(false);
   };
 
@@ -73,27 +114,24 @@ export default function HomeScreen() {
       );
       setReminders(final);
       await saveReminders(final);
+
+      if (enabled) {
+        const timeUntil = getTimeUntilText(reminder.hour, reminder.minute);
+        setToastMessage(`Next notification in ${timeUntil}`);
+        setToastVisible(true);
+      }
     }
   };
 
-  const handleDelete = (id: string) => {
-    Alert.alert("Delete Reminder", "Are you sure you want to delete this reminder?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          const reminder = reminders.find((r) => r.id === id);
-          if (reminder) {
-            await cancelReminder(reminder.notificationIds);
-          }
-          const updated = reminders.filter((r) => r.id !== id);
-          setReminders(updated);
-          await saveReminders(updated);
-        },
-      },
-    ]);
+  const handleDelete = async (id: string) => {
+    const reminder = reminders.find((r) => r.id === id);
+    if (reminder) {
+      await cancelReminder(reminder.notificationIds);
+    }
+    const updated = reminders.filter((r) => r.id !== id);
+    prevCountRef.current = updated.length;
+    setReminders(updated);
+    await saveReminders(updated);
   };
 
   const handlePress = (reminder: Reminder) => {
@@ -126,78 +164,87 @@ export default function HomeScreen() {
   const activeCount = reminders.filter((r) => r.enabled).length;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-            {getGreeting()} 👋
-          </Text>
-          <Text style={[styles.title, { color: colors.text }]}>My Reminders</Text>
-        </View>
-        {reminders.length > 0 && (
-          <View style={[styles.badge, { backgroundColor: colors.primaryBg }]}>
-            <Text style={[styles.badgeText, { color: colors.primary }]}>
-              {activeCount} active
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <View>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+              {getGreeting()} 👋
             </Text>
+            <Text style={[styles.title, { color: colors.text }]}>My Reminders</Text>
           </View>
-        )}
-      </View>
-
-      {/* List */}
-      {reminders.length === 0 ? (
-        <EmptyState colors={colors} />
-      ) : (
-        <FlatList
-          data={reminders}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => (
-            <ReminderCard
-              reminder={item}
-              colors={colors}
-              onToggle={handleToggle}
-              onPress={handlePress}
-              onDelete={handleDelete}
-              index={index}
-            />
+          {reminders.length > 0 && (
+            <View style={[styles.badge, { backgroundColor: colors.primaryBg }]}>
+              <Text style={[styles.badgeText, { color: colors.primary }]}>
+                {activeCount} active
+              </Text>
+            </View>
           )}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-            />
-          }
-        />
-      )}
+        </View>
 
-      {/* FAB */}
-      <Animated.View
-        style={[
-          styles.fabContainer,
-          {
-            transform: [{ scale: fabScale }],
-          },
-        ]}
-      >
-        <Pressable
-          onPress={handleFabPress}
-          onPressIn={handleFabPressIn}
-          onPressOut={handleFabPressOut}
+        {/* List */}
+        {reminders.length === 0 ? (
+          <EmptyState colors={colors} />
+        ) : (
+          <FlatList
+            data={reminders}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => (
+              <ReminderCard
+                reminder={item}
+                colors={colors}
+                onToggle={handleToggle}
+                onPress={handlePress}
+                onDelete={handleDelete}
+                index={index}
+              />
+            )}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.primary}
+              />
+            }
+          />
+        )}
+
+        {/* FAB */}
+        <Animated.View
           style={[
-            styles.fab,
+            styles.fabContainer,
             {
-              backgroundColor: colors.fab,
-              shadowColor: colors.fabShadow,
+              transform: [{ scale: fabScale }],
             },
           ]}
         >
-          <Text style={styles.fabIcon}>+</Text>
-        </Pressable>
-      </Animated.View>
-    </SafeAreaView>
+          <Pressable
+            onPress={handleFabPress}
+            onPressIn={handleFabPressIn}
+            onPressOut={handleFabPressOut}
+            style={[
+              styles.fab,
+              {
+                backgroundColor: colors.fab,
+                shadowColor: colors.fabShadow,
+              },
+            ]}
+          >
+            <Text style={styles.fabIcon}>+</Text>
+          </Pressable>
+        </Animated.View>
+
+        {/* Toast */}
+        <Toast
+          message={toastMessage}
+          visible={toastVisible}
+          onHide={() => setToastVisible(false)}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
