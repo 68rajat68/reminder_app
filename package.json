@@ -1,5 +1,5 @@
 {
-  "name": "reminder-app-temp",
+  "name": "daily-reminders",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -8,7 +8,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:apk": "source .env && eas build -p android --profile preview --local",
+    "build:apk:cloud": "source .env && eas build -p android --profile preview"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
