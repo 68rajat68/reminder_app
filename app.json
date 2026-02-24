@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "reminder-app-temp",
-    "slug": "reminder-app-temp",
+    "name": "Daily Reminders",
+    "slug": "daily-reminders",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "reminderapptemp",
+    "scheme": "dailyreminders",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -27,6 +27,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -38,7 +39,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,
