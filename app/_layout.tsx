@@ -3,12 +3,13 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@rea
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Notifications from 'expo-notifications';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { setupNotifications, requestPermissions } from '../services/notifications';
 import { migrateIfNeeded } from '../services/migration';
-import { getAllHabits } from '../services/database';
+import { getAllHabits, toggleCompletion } from '../services/database';
 import { scheduleReminder, cancelAllReminders } from '../services/notifications';
-import { updateStreakForHabit } from '../services/streaks';
+import { updateStreakForHabit, getTodayString } from '../services/streaks';
 
 function AppContent() {
   const { resolvedScheme } = useTheme();
@@ -31,6 +32,24 @@ function AppContent() {
       }
     }
     init();
+
+    // Listen for notification quick actions
+    const subscription = Notifications.addNotificationResponseReceivedListener(async (response) => {
+      if (response.actionIdentifier === 'MARK_DONE') {
+        const habitId = response.notification.request.identifier;
+        // Find the habit by checking all habits — notification ID maps to scheduled notification
+        const allHabits = await getAllHabits();
+        for (const habit of allHabits) {
+          if (habit.notificationIds.includes(response.notification.request.identifier)) {
+            await toggleCompletion(habit.id, getTodayString(), true);
+            await updateStreakForHabit(habit);
+            break;
+          }
+        }
+      }
+    });
+
+    return () => subscription.remove();
   }, []);
 
   return (

@@ -1,7 +1,7 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import { Platform } from "react-native";
-import { Reminder } from "../types/reminder";
+import { Habit } from "../types/habit";
 
 export async function setupNotifications() {
   Notifications.setNotificationHandler({
@@ -21,6 +21,14 @@ export async function setupNotifications() {
       sound: "default",
     });
   }
+
+  await Notifications.setNotificationCategoryAsync("habit", [
+    {
+      identifier: "MARK_DONE",
+      buttonTitle: "Mark as Done ✓",
+      options: { opensAppToForeground: false },
+    },
+  ]);
 }
 
 export async function requestPermissions(): Promise<boolean> {
@@ -37,7 +45,7 @@ export async function requestPermissions(): Promise<boolean> {
 }
 
 export async function scheduleReminder(
-  reminder: Reminder
+  reminder: Habit
 ): Promise<string[]> {
   await cancelReminder(reminder.notificationIds);
 
@@ -45,8 +53,9 @@ export async function scheduleReminder(
 
   const ids: string[] = [];
   const content: Notifications.NotificationContentInput = {
-    title: "Reminder",
-    body: reminder.message,
+    title: "Daily Companion",
+    body: `${reminder.icon} ${reminder.message}`,
+    categoryIdentifier: "habit",
     sound: "default",
     ...(Platform.OS === "android" ? { channelId: "reminders" } : {}),
   };
