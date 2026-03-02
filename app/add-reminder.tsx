@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '../hooks/use-app-theme';
 import { Habit, CategoryType, CATEGORIES } from '../types/habit';
-import { getAllHabits, getHabitById, insertHabit, updateHabit as updateHabitDb } from '../services/database';
+import { getHabitById, insertHabit, updateHabit as updateHabitDb } from '../services/database';
 import { scheduleReminder, cancelReminder } from '../services/notifications';
 import { Spacing, BorderRadius, FontSize } from '../constants/theme';
 import DaySelector from '../components/DaySelector';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { CategoryType, CATEGORY_ICONS } from '../types/habit';
 import { ThemeColors, Spacing, BorderRadius } from '../constants/theme';
