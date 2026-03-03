@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Dimensions, Animated } from 'react-native';
+// Fix #11: Use useWindowDimensions instead of module-level Dimensions.get
+import React, { useEffect, useRef, useMemo } from 'react';
+import { View, StyleSheet, Animated, useWindowDimensions } from 'react-native';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CONFETTI_COUNT = 30;
 const CONFETTI_COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#ef4444', '#14b8a6'];
 
@@ -10,17 +10,18 @@ interface Props {
   onComplete?: () => void;
 }
 
-function ConfettiPiece({ delay, color }: { delay: number; color: string }) {
+function ConfettiPiece({ delay, color, screenWidth, screenHeight }: { delay: number; color: string; screenWidth: number; screenHeight: number }) {
   const translateY = useRef(new Animated.Value(-20)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(1)).current;
   const rotate = useRef(new Animated.Value(0)).current;
-  const startX = Math.random() * SCREEN_WIDTH;
+  const startX = useMemo(() => Math.random() * screenWidth, [screenWidth]);
+  const pieceSize = useMemo(() => ({ w: 8 + Math.random() * 6, h: 8 + Math.random() * 6, round: Math.random() > 0.5 }), []);
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: SCREEN_HEIGHT + 50,
+        toValue: screenHeight + 50,
         duration: 2000 + Math.random() * 1000,
         delay,
         useNativeDriver: true,
@@ -53,9 +54,9 @@ function ConfettiPiece({ delay, color }: { delay: number; color: string }) {
       style={[styles.piece, {
         left: startX,
         backgroundColor: color,
-        width: 8 + Math.random() * 6,
-        height: 8 + Math.random() * 6,
-        borderRadius: Math.random() > 0.5 ? 50 : 2,
+        width: pieceSize.w,
+        height: pieceSize.h,
+        borderRadius: pieceSize.round ? 50 : 2,
         opacity,
         transform: [{ translateY }, { translateX }, { rotate: spin }],
       }]}
@@ -64,6 +65,8 @@ function ConfettiPiece({ delay, color }: { delay: number; color: string }) {
 }
 
 export default function Confetti({ visible, onComplete }: Props) {
+  const { width, height } = useWindowDimensions();
+
   useEffect(() => {
     if (visible && onComplete) {
       const timer = setTimeout(onComplete, 3000);
@@ -80,6 +83,8 @@ export default function Confetti({ visible, onComplete }: Props) {
           key={i}
           delay={i * 50}
           color={CONFETTI_COLORS[i % CONFETTI_COLORS.length]}
+          screenWidth={width}
+          screenHeight={height}
         />
       ))}
     </View>

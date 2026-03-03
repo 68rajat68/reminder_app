@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, FlatList, StyleSheet, Pressable, Animated, RefreshControl,
-  Dimensions,
+  AppState, useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -12,14 +12,12 @@ import { getAllHabits, getCompletionsForDate, toggleCompletion, deleteHabit as d
 import { scheduleReminder, cancelReminder } from '../../services/notifications';
 import { updateStreakForHabit, getTodayString, getStreakMilestone } from '../../services/streaks';
 import { Spacing, BorderRadius, FontSize } from '../../constants/theme';
+import { appLog } from '../../services/logger';
 import HabitCard from '../../components/HabitCard';
 import EmptyState from '../../components/EmptyState';
 import Toast from '../../components/Toast';
 import ProgressRing from '../../components/ProgressRing';
 import Confetti from '../../components/Confetti';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const RING_SIZE = Math.min(SCREEN_WIDTH * 0.35, 160);
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -35,6 +33,10 @@ function getExpoWeekday(): number {
 export default function TodayScreen() {
   const colors = useAppTheme();
   const router = useRouter();
+  // Fix #11: Use useWindowDimensions for responsive ring size
+  const { width: screenWidth } = useWindowDimensions();
+  const ringSize = Math.min(screenWidth * 0.35, 160);
+
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
@@ -42,6 +44,8 @@ export default function TodayScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const fabScale = useRef(new Animated.Value(1)).current;
+  // Fix #15: Track last-known date for rollover detection
+  const lastDateRef = useRef(getTodayString());
 
   const todayStr = getTodayString();
   const todayWeekday = getExpoWeekday();
@@ -61,13 +65,31 @@ export default function TodayScreen() {
     }, [loadData])
   );
 
+  // Fix #15: Reload data when app comes to foreground (handles midnight rollover)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        const currentDate = getTodayString();
+        if (currentDate !== lastDateRef.current) {
+          appLog.dateRollover(lastDateRef.current, currentDate);
+          lastDateRef.current = currentDate;
+        }
+        appLog.foregroundReload();
+        loadData();
+      }
+    });
+    return () => subscription.remove();
+  }, [loadData]);
+
   const todaysHabits = habits.filter(h => h.enabled && h.days.includes(todayWeekday));
   const completedCount = todaysHabits.filter(h => completedIds.has(h.id)).length;
   const totalCount = todaysHabits.length;
   const progress = totalCount > 0 ? completedCount / totalCount : 0;
 
-  const pendingHabits = habits.filter(h => h.days.includes(todayWeekday) && !completedIds.has(h.id));
-  const doneHabits = habits.filter(h => h.days.includes(todayWeekday) && completedIds.has(h.id));
+  // Fix #9: Check h.enabled so disabled habits don't appear in pending/done
+  const pendingHabits = habits.filter(h => h.enabled && h.days.includes(todayWeekday) && !completedIds.has(h.id));
+  const doneHabits = habits.filter(h => h.enabled && h.days.includes(todayWeekday) && completedIds.has(h.id));
+  const disabledTodayHabits = habits.filter(h => !h.enabled && h.days.includes(todayWeekday));
   const otherHabits = habits.filter(h => !h.days.includes(todayWeekday));
 
   const onRefresh = async () => {
@@ -156,6 +178,7 @@ export default function TodayScreen() {
   const allData = [
     ...pendingHabits.map(h => ({ ...h, _section: 'pending' as const })),
     ...doneHabits.map(h => ({ ...h, _section: 'done' as const })),
+    ...disabledTodayHabits.map(h => ({ ...h, _section: 'paused' as const })),
     ...otherHabits.map(h => ({ ...h, _section: 'other' as const })),
   ];
 
@@ -180,7 +203,7 @@ export default function TodayScreen() {
         {totalCount > 0 && (
           <View style={styles.ringContainer}>
             <ProgressRing
-              size={RING_SIZE}
+              size={ringSize}
               strokeWidth={10}
               progress={progress}
               color={colors.primary}
@@ -201,12 +224,16 @@ export default function TodayScreen() {
 
   const renderItem = ({ item, index }: { item: Habit & { _section: string }; index: number }) => {
     const showDoneHeader = item._section === 'done' && index === pendingHabits.length;
-    const showOtherHeader = item._section === 'other' && index === pendingHabits.length + doneHabits.length;
+    const showPausedHeader = item._section === 'paused' && index === pendingHabits.length + doneHabits.length;
+    const showOtherHeader = item._section === 'other' && index === pendingHabits.length + doneHabits.length + disabledTodayHabits.length;
 
     return (
       <View>
         {showDoneHeader && doneHabits.length > 0 && (
           <Text style={[styles.sectionHeader, { color: colors.success }]}>COMPLETED ✓</Text>
+        )}
+        {showPausedHeader && disabledTodayHabits.length > 0 && (
+          <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>PAUSED</Text>
         )}
         {showOtherHeader && otherHabits.length > 0 && (
           <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>OTHER DAYS</Text>

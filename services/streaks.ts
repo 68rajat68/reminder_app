@@ -1,6 +1,7 @@
 // services/streaks.ts
 import { Habit } from '../types/habit';
 import { getCompletionsForHabit, updateHabit } from './database';
+import { streakLog } from './logger';
 
 function formatDate(date: Date): string {
   const y = date.getFullYear();
@@ -52,6 +53,7 @@ export async function calculateStreak(habit: Habit): Promise<{ streak: number; b
   }
 
   const bestStreak = Math.max(streak, habit.bestStreak);
+  streakLog.calculated(habit.id, habit.message, streak, bestStreak);
   return { streak, bestStreak };
 }
 

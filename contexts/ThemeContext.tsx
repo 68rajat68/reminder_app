@@ -1,7 +1,8 @@
 // contexts/ThemeContext.tsx
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useColorScheme as useSystemColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { themeLog } from '../services/logger';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -38,38 +39,61 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useSystemColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
-  const [accentColor, setAccentColorState] = useState(ACCENT_COLORS[0].value);
+  const [accentColor, setAccentColorState] = useState<string>(ACCENT_COLORS[0].value);
   const [loaded, setLoaded] = useState(false);
+
+  // Fix #4: Use refs to always have current values, preventing stale closure race
+  const modeRef = useRef(mode);
+  const accentRef = useRef(accentColor);
+  modeRef.current = mode;
+  accentRef.current = accentColor;
 
   useEffect(() => {
     AsyncStorage.getItem(PREFS_KEY).then(json => {
       if (json) {
         try {
           const prefs = JSON.parse(json);
-          if (prefs.themeMode) setModeState(prefs.themeMode);
-          if (prefs.accentColor) setAccentColorState(prefs.accentColor);
+          if (prefs.themeMode) {
+            setModeState(prefs.themeMode);
+            modeRef.current = prefs.themeMode;
+          }
+          if (prefs.accentColor) {
+            setAccentColorState(prefs.accentColor);
+            accentRef.current = prefs.accentColor;
+          }
+          themeLog.loaded(prefs.themeMode || 'system', prefs.accentColor || ACCENT_COLORS[0].value);
         } catch {}
       }
       setLoaded(true);
     });
   }, []);
 
-  const savePrefs = async (newMode: ThemeMode, newAccent: string) => {
-    await AsyncStorage.setItem(PREFS_KEY, JSON.stringify({
-      themeMode: newMode,
-      accentColor: newAccent,
-    }));
-  };
+  const savePrefs = useCallback(async (newMode: ThemeMode, newAccent: string) => {
+    try {
+      await AsyncStorage.setItem(PREFS_KEY, JSON.stringify({
+        themeMode: newMode,
+        accentColor: newAccent,
+      }));
+      themeLog.persisted(newMode, newAccent);
+    } catch (e) {
+      themeLog.error(e);
+    }
+  }, []);
 
-  const setMode = (newMode: ThemeMode) => {
+  // Fix #13: Wrap in useCallback for stable references + use refs for current values
+  const setMode = useCallback((newMode: ThemeMode) => {
     setModeState(newMode);
-    savePrefs(newMode, accentColor);
-  };
+    modeRef.current = newMode;
+    themeLog.changed('mode', newMode);
+    savePrefs(newMode, accentRef.current);
+  }, [savePrefs]);
 
-  const setAccentColor = (color: string) => {
+  const setAccentColor = useCallback((color: string) => {
     setAccentColorState(color);
-    savePrefs(mode, color);
-  };
+    accentRef.current = color;
+    themeLog.changed('accentColor', color);
+    savePrefs(modeRef.current, color);
+  }, [savePrefs]);
 
   const resolvedScheme: 'light' | 'dark' = mode === 'system'
     ? (systemScheme === 'dark' ? 'dark' : 'light')
@@ -77,7 +101,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(() => ({
     mode, accentColor, resolvedScheme, setMode, setAccentColor,
-  }), [mode, accentColor, resolvedScheme]);
+  }), [mode, accentColor, resolvedScheme, setMode, setAccentColor]);
 
   if (!loaded) return null;
 

@@ -1,6 +1,7 @@
+// Fix #7: Added Alert for delete confirmation
 import React, { useRef } from 'react';
 import {
-  View, Text, StyleSheet, Switch, Pressable, Animated,
+  View, Text, StyleSheet, Switch, Pressable, Animated, Alert,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -106,7 +107,14 @@ export default function HabitCard({
   const handleSwipeOpen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     swipeableRef.current?.close();
-    onDelete(habit.id);
+    Alert.alert(
+      'Delete Habit',
+      `Delete "${habit.message}" and all its history? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete(habit.id) },
+      ],
+    );
   };
 
   const checkScale = checkAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });

@@ -8,6 +8,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import * as Haptics from 'expo-haptics';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppTheme } from '../hooks/use-app-theme';
+import { useTheme } from '../contexts/ThemeContext';
 import { Habit, CategoryType, CATEGORIES } from '../types/habit';
 import { getHabitById, insertHabit, updateHabit as updateHabitDb } from '../services/database';
 import { scheduleReminder, cancelReminder } from '../services/notifications';
@@ -22,6 +23,8 @@ function generateId(): string {
 
 export default function AddReminderScreen() {
   const colors = useAppTheme();
+  // Fix #10: Use resolvedScheme instead of hardcoded color comparison
+  const { resolvedScheme } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!params.id;
@@ -202,7 +205,7 @@ export default function AddReminderScreen() {
                   mode="time"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                   onChange={handleTimeChange}
-                  themeVariant={colors.background === '#0f0f1a' ? 'dark' : 'light'}
+                  themeVariant={resolvedScheme}
                 />
               </View>
             )}

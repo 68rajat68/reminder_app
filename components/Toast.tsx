@@ -1,6 +1,8 @@
+// Fix #5: Use app theme context instead of raw useColorScheme + default accent
 import React, { useEffect, useRef } from "react";
-import { Text, StyleSheet, Animated, useColorScheme } from "react-native";
-import { useThemeColors, Spacing, BorderRadius, FontSize } from "../constants/theme";
+import { Text, StyleSheet, Animated } from "react-native";
+import { useAppTheme } from "../hooks/use-app-theme";
+import { Spacing, BorderRadius, FontSize } from "../constants/theme";
 
 interface Props {
   message: string;
@@ -10,8 +12,7 @@ interface Props {
 }
 
 export default function Toast({ message, visible, onHide, duration = 3000 }: Props) {
-  const colorScheme = useColorScheme();
-  const colors = useThemeColors(colorScheme);
+  const colors = useAppTheme();
   const translateY = useRef(new Animated.Value(100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 

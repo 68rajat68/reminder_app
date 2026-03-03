@@ -25,16 +25,16 @@ export default function StatsScreen() {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [weeklyData, setWeeklyData] = useState<{ day: string; count: number; total: number }[]>([]);
   const [monthlyData, setMonthlyData] = useState<Record<string, number>>({});
+  // Fix #12: Track current year/month in state so it's always fresh
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth());
 
-  const now = new Date();
+  // Fix #12: loadStats uses fresh Date inside, not a stale outer `now`
+  const loadStats = useCallback(async () => {
+    const now = new Date();
+    setCurrentYear(now.getFullYear());
+    setCurrentMonth(now.getMonth());
 
-  useFocusEffect(
-    useCallback(() => {
-      loadStats();
-    }, [])
-  );
-
-  const loadStats = async () => {
     const allHabits = await getAllHabits();
     setHabits(allHabits);
 
@@ -89,7 +89,13 @@ export default function StatsScreen() {
       }
     }
     setMonthlyData(heatData);
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
 
   const bestStreak = habits.reduce((max, h) => Math.max(max, h.bestStreak), 0);
   const activeStreaks = habits.filter(h => h.streak > 0).length;
@@ -124,7 +130,7 @@ export default function StatsScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>THIS MONTH</Text>
           <View style={[styles.chartCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <MonthlyHeatMap data={monthlyData} colors={colors} year={now.getFullYear()} month={now.getMonth()} />
+            <MonthlyHeatMap data={monthlyData} colors={colors} year={currentYear} month={currentMonth} />
           </View>
         </View>
 
