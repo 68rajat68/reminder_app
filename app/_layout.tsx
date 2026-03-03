@@ -18,36 +18,37 @@ function AppContent() {
     async function init() {
       appLog.initStarted();
 
-      await migrateIfNeeded();
-      await setupNotifications();
-      await requestPermissions();
+      try {
+        await migrateIfNeeded();
+        await setupNotifications();
+        await requestPermissions();
 
-      // Re-sync all notifications on launch
-      const habits = await getAllHabits();
-      await cancelAllReminders();
+        // Re-sync all notifications on launch
+        const habits = await getAllHabits();
+        await cancelAllReminders();
 
-      let syncedCount = 0;
-      for (const h of habits) {
-        // Fix #6: try-catch per habit so one failure doesn't block the rest
-        try {
-          if (h.enabled) {
-            // Fix #1: Persist new notification IDs back to the database
-            const newIds = await scheduleReminder(h);
-            const withIds = { ...h, notificationIds: newIds };
-            await updateHabit(withIds);
-            appLog.syncHabit(h.id, h.message, `rescheduled (${newIds.length} notifications)`);
-          } else {
-            appLog.syncHabit(h.id, h.message, 'skipped (disabled)');
+        let syncedCount = 0;
+        for (const h of habits) {
+          try {
+            if (h.enabled) {
+              const newIds = await scheduleReminder(h);
+              const withIds = { ...h, notificationIds: newIds };
+              await updateHabit(withIds);
+              appLog.syncHabit(h.id, h.message, `rescheduled (${newIds.length} notifications)`);
+            } else {
+              appLog.syncHabit(h.id, h.message, 'skipped (disabled)');
+            }
+            await updateStreakForHabit(h);
+            syncedCount++;
+          } catch (e) {
+            appLog.syncError(h.id, e);
           }
-          // Recalculate streaks on launch
-          await updateStreakForHabit(h);
-          syncedCount++;
-        } catch (e) {
-          appLog.syncError(h.id, e);
         }
-      }
 
-      appLog.initCompleted(syncedCount);
+        appLog.initCompleted(syncedCount);
+      } catch (e) {
+        appLog.error('init', e);
+      }
     }
     init();
 

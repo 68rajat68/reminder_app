@@ -38,7 +38,12 @@ function log(level: LogLevel, tag: string, message: string, data?: unknown) {
   const prefix = `${icon} [${timestamp}] ${color}[${tag}]${RESET}`;
 
   if (data !== undefined) {
-    const serialized = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+    let serialized: string;
+    try {
+      serialized = typeof data === 'object' ? JSON.stringify(data, null, 2) : String(data);
+    } catch {
+      serialized = '[Unserializable data]';
+    }
     console[level === 'debug' ? 'log' : level](`${prefix} ${message}\n`, serialized);
   } else {
     console[level === 'debug' ? 'log' : level](`${prefix} ${message}`);

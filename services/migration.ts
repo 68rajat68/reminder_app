@@ -39,7 +39,7 @@ export async function migrateIfNeeded(): Promise<void> {
 
     migrateLog.started(reminders.length);
 
-    // Fix #3: Use INSERT OR IGNORE so partial re-migrations don't deadlock on duplicate PKs
+    // Use INSERT OR IGNORE so partial re-migrations don't deadlock on duplicate PKs
     let migratedCount = 0;
     for (const r of reminders) {
       const habit: Habit = {
@@ -56,7 +56,7 @@ export async function migrateIfNeeded(): Promise<void> {
         streak: 0,
         bestStreak: 0,
       };
-      await database.runAsync(
+      const result = await database.runAsync(
         `INSERT OR IGNORE INTO habits (id, message, hour, minute, days, enabled, notificationIds, category, icon, streak, bestStreak, createdAt)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [habit.id, habit.message, habit.hour, habit.minute,
@@ -64,8 +64,12 @@ export async function migrateIfNeeded(): Promise<void> {
          JSON.stringify(habit.notificationIds), habit.category,
          habit.icon, habit.streak, habit.bestStreak, habit.createdAt]
       );
-      migrateLog.habitMigrated(habit.id, habit.message);
-      migratedCount++;
+      if (result.changes > 0) {
+        migrateLog.habitMigrated(habit.id, habit.message);
+        migratedCount++;
+      } else {
+        migrateLog.skipped(`duplicate: "${habit.message}" (${habit.id})`);
+      }
     }
 
     await AsyncStorage.removeItem(STORAGE_KEY);

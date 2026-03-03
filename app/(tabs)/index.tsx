@@ -39,25 +39,30 @@ export default function TodayScreen() {
 
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [todayStr, setTodayStr] = useState(getTodayString);
+  const [todayWeekday, setTodayWeekday] = useState(getExpoWeekday);
   const [refreshing, setRefreshing] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastVisible, setToastVisible] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const fabScale = useRef(new Animated.Value(1)).current;
-  // Fix #15: Track last-known date for rollover detection
-  const lastDateRef = useRef(getTodayString());
-
-  const todayStr = getTodayString();
-  const todayWeekday = getExpoWeekday();
+  const lastDateRef = useRef(todayStr);
+  const lastForegroundRef = useRef(Date.now());
 
   const loadData = useCallback(async () => {
+    // Always compute fresh date inside loadData so no stale closure
+    const currentDate = getTodayString();
+    const currentWeekday = getExpoWeekday();
+    setTodayStr(currentDate);
+    setTodayWeekday(currentWeekday);
+
     const allHabits = await getAllHabits();
-    const todayCompletions = await getCompletionsForDate(todayStr);
+    const todayCompletions = await getCompletionsForDate(currentDate);
     const completedSet = new Set(todayCompletions.filter(c => c.completed).map(c => c.habitId));
     setHabits(allHabits);
     setCompletedIds(completedSet);
     return { allHabits, completedSet };
-  }, [todayStr]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,10 +70,15 @@ export default function TodayScreen() {
     }, [loadData])
   );
 
-  // Fix #15: Reload data when app comes to foreground (handles midnight rollover)
+  // Reload data when app comes to foreground (handles midnight rollover)
+  // Debounced: skip if last foreground was <2s ago
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
+        const now = Date.now();
+        if (now - lastForegroundRef.current < 2000) return;
+        lastForegroundRef.current = now;
+
         const currentDate = getTodayString();
         if (currentDate !== lastDateRef.current) {
           appLog.dateRollover(lastDateRef.current, currentDate);
