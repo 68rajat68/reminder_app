@@ -151,7 +151,8 @@ export default function TodayScreen() {
     setHabits(prev => prev.map(h => h.id === id ? updated : h));
     await updateHabit(updated);
 
-    const newIds = await scheduleReminder(updated);
+    let newIds: string[] = [];
+    try { newIds = await scheduleReminder(updated); } catch { /* notifications unavailable */ }
     const final = { ...updated, notificationIds: newIds };
     setHabits(prev => prev.map(h => h.id === id ? final : h));
     await updateHabit(final);

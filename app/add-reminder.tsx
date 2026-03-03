@@ -98,7 +98,8 @@ export default function AddReminderScreen() {
         icon,
       };
 
-      const newIds = await scheduleReminder(updated);
+      let newIds: string[] = [];
+      try { newIds = await scheduleReminder(updated); } catch { /* notifications unavailable */ }
       updated.notificationIds = newIds;
       await updateHabitDb(updated);
     } else {
@@ -117,7 +118,8 @@ export default function AddReminderScreen() {
         bestStreak: 0,
       };
 
-      const newIds = await scheduleReminder(newHabit);
+      let newIds: string[] = [];
+      try { newIds = await scheduleReminder(newHabit); } catch { /* notifications unavailable */ }
       newHabit.notificationIds = newIds;
       await insertHabit(newHabit);
     }
