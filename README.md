@@ -255,7 +255,7 @@ Available loggers: `dbLog`, `notifyLog`, `streakLog`, `migrateLog`, `appLog`, `t
 
 ## License
 
-This project is private and not licensed for redistribution.
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
